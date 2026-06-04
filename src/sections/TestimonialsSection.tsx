@@ -7,49 +7,65 @@ import { opinionesFallback } from '../services/fallbackData';
 import type { Opinion } from '../types';
 
 export function TestimonialsSection() {
-  const [opiniones, setOpiniones] = useState<Opinion[]>(opinionesFallback);
+  const [opiniones, setOpiniones] = useState<Opinion[]>([]);
   const [form, setForm] = useState({ autor_anonimo: '', comentario: '' });
   const [status, setStatus] = useState('');
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    api.getOpiniones().then(setOpiniones).catch(() => setOpiniones(opinionesFallback));
+    api
+      .getOpiniones()
+      .then((items) => setOpiniones(items.filter(esOpinionPublica)))
+      .catch(() => setOpiniones(opinionesFallback.filter(esOpinionPublica)))
+      .finally(() => setLoading(false));
   }, []);
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    setStatus('Enviando opinión...');
+    setStatus('Enviando opinion...');
+
     try {
-      const nuevaOpinion = await api.crearOpinion(form);
-      setOpiniones((items) => [nuevaOpinion, ...items]);
+      await api.crearOpinion(form);
       setForm({ autor_anonimo: '', comentario: '' });
-      setStatus('Gracias. Tu opinión quedó registrada.');
+      setStatus('Gracias. Tu opinion quedo registrada y sera publicada cuando sea moderada.');
     } catch {
-      setStatus('No se pudo enviar la opinión. Verificá que el backend esté en ejecución.');
+      setStatus('No se pudo enviar la opinion. Verifica que el backend este en ejecucion.');
     }
   }
 
+  const opinionesPublicas = opiniones.filter(esOpinionPublica);
+
   return (
-    <section id="opiniones" className="section section-white">
+    <section id="opiniones" className="section section-white testimonials-section">
       <div className="container testimonials-layout">
         <div>
           <SectionHeader
-            title="Lo que dicen de nosotros"
-            description="Opiniones de ejemplo para mostrar cómo se verá la participación de la comunidad educativa."
+            eyebrow="Opiniones de la comunidad"
+            title="Testimonios"
+            description="Comentarios publicados de familias, docentes y personas interesadas en el proyecto educativo."
           />
+
           <div className="testimonial-list">
-            {opiniones.slice(0, 3).map((opinion) => (
+            {loading && <p className="empty-state">Cargando opiniones publicadas...</p>}
+
+            {!loading && opinionesPublicas.length === 0 && (
+              <p className="empty-state">Todavia no hay opiniones publicadas.</p>
+            )}
+
+            {!loading && opinionesPublicas.slice(0, 4).map((opinion) => (
               <article className="testimonial-card" key={opinion.id}>
                 <MessageSquareQuote size={34} />
-                <p>“{opinion.comentario}”</p>
+                <p>"{opinion.comentario}"</p>
                 <strong>{opinion.autor_anonimo}</strong>
               </article>
             ))}
           </div>
         </div>
 
-        <form className="form-card" onSubmit={handleSubmit}>
-          <h3>Compartí tu experiencia</h3>
-          <p>No requiere iniciar sesión para comentar.</p>
+        <form className="form-card testimonial-form" onSubmit={handleSubmit}>
+          <h3>Comparti tu experiencia</h3>
+          <p>Tu comentario se enviara como pendiente de moderacion antes de publicarse.</p>
+
           <label>
             Nombre o referencia
             <input
@@ -59,20 +75,26 @@ export function TestimonialsSection() {
               placeholder="Ej.: Madre de familia"
             />
           </label>
+
           <label>
-            Opinión
+            Opinion
             <textarea
               required
               rows={5}
               value={form.comentario}
               onChange={(event) => setForm({ ...form, comentario: event.target.value })}
-              placeholder="Escribí un comentario breve"
+              placeholder="Escribi un comentario breve"
             />
           </label>
-          <Button type="submit"><Send size={18} /> Enviar opinión</Button>
+
+          <Button type="submit"><Send size={18} /> Enviar opinion</Button>
           {status && <span className="form-status">{status}</span>}
         </form>
       </div>
     </section>
   );
+}
+
+function esOpinionPublica(opinion: Opinion) {
+  return opinion.estado_moderacion === 'visible' && opinion.visible === 1;
 }

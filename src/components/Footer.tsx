@@ -5,11 +5,13 @@ export function Footer() {
     <footer className="footer">
       <div className="container footer-grid">
         <div>
-          <img
-            className="footer-logo"
-            src="https://res.cloudinary.com/drozim7xo/image/upload/v1778197079/81afd62a-58dd-4071-b70f-bb5488ed4937.png"
-            alt="Educar para Transformar - Logo"
-          />
+          <div className="footer-logo-box">
+            <img
+              className="footer-logo"
+              src="https://res.cloudinary.com/drozim7xo/image/upload/v1778197079/81afd62a-58dd-4071-b70f-bb5488ed4937.png"
+              alt="Educar para Transformar - Logo"
+            />
+          </div>
           <p>Institución de gestión privada de alta calidad educativa.</p>
           <p>Apertura: marzo 2027</p>
         </div>
