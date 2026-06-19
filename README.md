@@ -9,7 +9,7 @@ El proyecto esta pensado como entrega clara y explicable para **Metodologia de S
 - Frontend: React + TypeScript + Vite.
 - Estilos: CSS comun responsive en `src/styles/global.css`.
 - Backend: Node.js + Express.
-- Base de datos: SQLite local con `node:sqlite`.
+- Base de datos: Postgres persistente en produccion via `DATABASE_URL`; SQLite queda solo como fallback de desarrollo y como origen para la migracion.
 - Iconos: `lucide-react`.
 
 ## Instalacion
@@ -29,6 +29,14 @@ API:
 ```txt
 http://localhost:3001/api
 ```
+
+Si existe `DATABASE_URL`, el backend usa Postgres. Si no existe, usa SQLite local en:
+
+```txt
+database/educar_transformar.sqlite
+```
+
+En Vercel, `DATABASE_URL` es obligatoria para impedir que la aplicacion guarde datos en el sistema de archivos temporal.
 
 ## Ejecutar frontend
 
@@ -78,10 +86,25 @@ personal@educar.com / personal123
 
 ## Base de datos
 
-Al iniciar el backend se crea o actualiza automaticamente:
+Al iniciar el backend se crean o actualizan automaticamente las tablas y datos demo. En Vercel debe configurarse una base Postgres persistente mediante:
 
 ```txt
-database/educar_transformar.sqlite
+DATABASE_URL
+```
+
+La opcion mas directa es instalar **Neon** desde Vercel Marketplace, crear una base y conectarla al proyecto `centroeducativo-tp` para Production, Preview y Development. La integracion agrega `DATABASE_URL` automaticamente.
+
+Para copiar los datos de la base SQLite actual:
+
+```bash
+npx vercel env pull .env.local
+npm run db:migrate
+```
+
+El importador exige que Postgres este vacio. Si la API ya creo los datos demo y queres reemplazarlos por el contenido exacto de SQLite:
+
+```bash
+npm run db:migrate -- --replace
 ```
 
 Tablas principales:
