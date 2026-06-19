@@ -1,10 +1,11 @@
 import { DatabaseSync } from 'node:sqlite';
 import { mkdirSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const databaseDir = join(__dirname, '..', 'database');
+const databaseDir = process.env.VERCEL ? tmpdir() : join(__dirname, '..', 'database');
 mkdirSync(databaseDir, { recursive: true });
 
 export const db = new DatabaseSync(join(databaseDir, 'educar_transformar.sqlite'));

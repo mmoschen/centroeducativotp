@@ -3,7 +3,6 @@ import cors from 'cors';
 import { db, initializeDatabase } from './database.js';
 
 const app = express();
-const PORT = process.env.PORT ?? 3001;
 
 initializeDatabase();
 
@@ -499,6 +498,4 @@ app.use((_req, res) => {
   res.status(404).json({ error: 'Ruta no encontrada.' });
 });
 
-app.listen(PORT, () => {
-  console.log(`API Educar para Transformar disponible en http://localhost:${PORT}`);
-});
+export default app;
