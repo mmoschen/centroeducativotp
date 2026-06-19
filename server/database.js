@@ -539,19 +539,9 @@ export const db = {
 };
 
 export async function initializeDatabase() {
-  if (databaseMode === 'postgres') {
-    await exec("SELECT pg_advisory_lock(hashtext('centroeducativo_database_init'))");
-  }
-
-  try {
-    await exec(databaseMode === 'postgres' ? postgresSchema : sqliteSchema);
-    await runMigrations();
-    await seedDatabase();
-  } finally {
-    if (databaseMode === 'postgres') {
-      await exec("SELECT pg_advisory_unlock(hashtext('centroeducativo_database_init'))");
-    }
-  }
+  await exec(databaseMode === 'postgres' ? postgresSchema : sqliteSchema);
+  await runMigrations();
+  await seedDatabase();
 }
 
 async function runMigrations() {
