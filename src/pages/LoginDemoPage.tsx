@@ -1,5 +1,5 @@
 import { FormEvent, useEffect, useState } from 'react';
-import { ArrowLeft, BookOpen, CalendarDays, KeyRound, ShieldCheck } from 'lucide-react';
+import { ArrowLeft, BookOpen, CalendarDays, KeyRound, LogOut, ShieldCheck } from 'lucide-react';
 import { Button } from '../components/Button';
 import { api } from '../services/api';
 import type { ActividadEscolar, AsignacionDocente, Curso, Instalacion, Noticia, Servicio, UsuarioAcceso } from '../types';
@@ -11,6 +11,14 @@ const demoUsers = [
   ['alumno@educar.com', 'alumno123', 'alumno'],
   ['personal@educar.com', 'personal123', 'personal'],
 ];
+
+const roleDescriptions = {
+  admin: 'Acceso general a la gestión institucional y sus módulos administrativos.',
+  docente: 'Acceso a cursos, materias y horarios asignados.',
+  padre: 'Acceso a avisos institucionales y actividades para las familias.',
+  alumno: 'Acceso a novedades y actividades escolares.',
+  personal: 'Acceso a servicios e instalaciones de la institución.',
+};
 
 type RoleData = {
   noticias?: Noticia[];
@@ -114,9 +122,22 @@ export function LoginDemoPage() {
             <div>
               <span className="eyebrow">Rol {usuario.rol}</span>
               <h1>Bienvenido/a, {usuario.nombre || usuario.email}</h1>
-              <p>Vista basica generada segun el rol seleccionado.</p>
+              <p>{roleDescriptions[usuario.rol]}</p>
             </div>
-            {usuario.rol === 'admin' && <a className="btn btn-primary" href="/admin">Abrir panel general</a>}
+            <div className="role-actions">
+              {usuario.rol === 'admin' && <a className="btn btn-primary" href="/admin">Abrir panel general</a>}
+              <Button
+                variant="outline"
+                type="button"
+                onClick={() => {
+                  setUsuario(null);
+                  setRoleData({});
+                  setStatus('');
+                }}
+              >
+                <LogOut size={18} /> Cambiar usuario
+              </Button>
+            </div>
           </div>
           <RoleContent usuario={usuario} data={roleData} />
         </main>
@@ -126,6 +147,19 @@ export function LoginDemoPage() {
 }
 
 function RoleContent({ usuario, data }: { usuario: UsuarioAcceso; data: RoleData }) {
+  if (usuario.rol === 'admin') {
+    return (
+      <div className="role-grid">
+        <RoleCard title="Resumen institucional" items={[
+          `${(data.noticias ?? []).length} noticias cargadas`,
+          `${(data.actividades ?? []).length} actividades cargadas`,
+          `${(data.cursos ?? []).length} cursos registrados`,
+        ]} />
+        <RoleCard title="Gestión disponible" items={['Solicitudes de inscripción', 'Opiniones y moderación', 'Postulaciones de empleo', 'Alumnos, docentes y cursos']} />
+      </div>
+    );
+  }
+
   if (usuario.rol === 'docente') {
     return (
       <div className="role-grid">
@@ -153,12 +187,16 @@ function RoleContent({ usuario, data }: { usuario: UsuarioAcceso; data: RoleData
     );
   }
 
-  return (
-    <div className="role-grid">
-      <RoleCard title="Noticias" items={(data.noticias ?? []).map((noticia) => noticia.titulo)} />
-      <RoleCard title="Actividades escolares" items={(data.actividades ?? []).map((actividad) => `${actividad.titulo} - ${actividad.fecha}`)} />
-    </div>
-  );
+  if (usuario.rol === 'alumno') {
+    return (
+      <div className="role-grid">
+        <RoleCard title="Novedades para estudiantes" items={(data.noticias ?? []).map((noticia) => noticia.titulo)} />
+        <RoleCard title="Agenda escolar" items={(data.actividades ?? []).map((actividad) => `${actividad.titulo} - ${actividad.fecha}`)} />
+      </div>
+    );
+  }
+
+  return null;
 }
 
 function RoleCard({ title, items }: { title: string; items: string[] }) {

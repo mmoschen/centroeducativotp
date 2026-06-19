@@ -3,6 +3,7 @@ import { FormEvent, useState } from 'react';
 import { Button } from '../components/Button';
 import { SectionHeader } from '../components/SectionHeader';
 import { api } from '../services/api';
+import { isValidEmail, isValidHttpUrl, isValidPhone } from '../services/validation';
 import type { PostulacionEmpleo } from '../types';
 
 const benefits = [
@@ -25,16 +26,67 @@ const initialForm: PostulacionEmpleo = {
 export function EmploymentSection() {
   const [form, setForm] = useState<PostulacionEmpleo>(initialForm);
   const [status, setStatus] = useState('');
+  const [statusTone, setStatusTone] = useState<'info' | 'success' | 'error'>('info');
+  const [submitting, setSubmitting] = useState(false);
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    const data = {
+      ...form,
+      nombre_candidato: form.nombre_candidato.trim(),
+      email: form.email.trim(),
+      telefono: form.telefono.trim(),
+      enlace_cv: form.enlace_cv.trim(),
+      mensaje: form.mensaje.trim(),
+    };
+    const missingFields = [
+      ['nombre', data.nombre_candidato],
+      ['email', data.email],
+      ['teléfono', data.telefono],
+      ['puesto de interés', data.puesto_interes],
+      ['enlace al CV', data.enlace_cv],
+      ['mensaje', data.mensaje],
+    ].filter(([, value]) => !value).map(([label]) => label);
+
+    if (missingFields.length > 0) {
+      setStatusTone('error');
+      setStatus(`Completá los campos obligatorios: ${missingFields.join(', ')}.`);
+      return;
+    }
+    if (!isValidEmail(data.email)) {
+      setStatusTone('error');
+      setStatus('Ingresá un email válido, por ejemplo nombre@dominio.com.');
+      return;
+    }
+    if (!isValidPhone(data.telefono)) {
+      setStatusTone('error');
+      setStatus('Ingresá un teléfono válido de 7 a 15 dígitos. Podés usar +, espacios, guiones y paréntesis.');
+      return;
+    }
+    if (!isValidHttpUrl(data.enlace_cv)) {
+      setStatusTone('error');
+      setStatus('El enlace al CV debe ser una dirección válida que comience con http:// o https://.');
+      return;
+    }
+    if (data.mensaje.length < 20) {
+      setStatusTone('error');
+      setStatus('El mensaje de presentación debe tener al menos 20 caracteres.');
+      return;
+    }
+
+    setSubmitting(true);
+    setStatusTone('info');
     setStatus('Enviando postulación...');
     try {
-      await api.crearPostulacion(form);
+      await api.crearPostulacion(data);
       setForm(initialForm);
+      setStatusTone('success');
       setStatus('Postulación recibida correctamente.');
-    } catch {
-      setStatus('No se pudo enviar la postulación. Verificá que el backend esté en ejecución.');
+    } catch (error) {
+      setStatusTone('error');
+      setStatus(error instanceof Error ? error.message : 'No se pudo enviar la postulación.');
+    } finally {
+      setSubmitting(false);
     }
   }
 
@@ -73,19 +125,19 @@ export function EmploymentSection() {
             </div>
           </div>
 
-          <form className="form-card flat-form" onSubmit={handleSubmit}>
+          <form className="form-card flat-form" onSubmit={handleSubmit} noValidate>
             <label>
               Nombre del candidato
-              <input required value={form.nombre_candidato} onChange={(event) => setForm({ ...form, nombre_candidato: event.target.value })} />
+              <input required maxLength={100} autoComplete="name" value={form.nombre_candidato} onChange={(event) => setForm({ ...form, nombre_candidato: event.target.value })} />
             </label>
             <div className="form-row">
               <label>
                 Email
-                <input required type="email" value={form.email} onChange={(event) => setForm({ ...form, email: event.target.value })} />
+                <input required type="email" maxLength={150} autoComplete="email" value={form.email} onChange={(event) => setForm({ ...form, email: event.target.value })} />
               </label>
               <label>
                 Teléfono
-                <input required value={form.telefono} onChange={(event) => setForm({ ...form, telefono: event.target.value })} />
+                <input required type="tel" inputMode="tel" maxLength={30} autoComplete="tel" value={form.telefono} onChange={(event) => setForm({ ...form, telefono: event.target.value })} />
               </label>
             </div>
             <label>
@@ -96,14 +148,14 @@ export function EmploymentSection() {
             </label>
             <label>
               Enlace al CV
-              <input value={form.enlace_cv} onChange={(event) => setForm({ ...form, enlace_cv: event.target.value })} placeholder="https://..." />
+              <input required type="url" maxLength={500} value={form.enlace_cv} onChange={(event) => setForm({ ...form, enlace_cv: event.target.value })} placeholder="https://..." />
             </label>
             <label>
               Mensaje
-              <textarea rows={4} value={form.mensaje} onChange={(event) => setForm({ ...form, mensaje: event.target.value })} />
+              <textarea required minLength={20} maxLength={1500} rows={4} value={form.mensaje} onChange={(event) => setForm({ ...form, mensaje: event.target.value })} />
             </label>
-            <Button type="submit">Enviar postulación</Button>
-            {status && <span className="form-status">{status}</span>}
+            <Button type="submit" disabled={submitting}>{submitting ? 'Enviando...' : 'Enviar postulación'}</Button>
+            {status && <span className={`form-status form-status-${statusTone}`} role="status" aria-live="polite">{status}</span>}
           </form>
         </div>
       </div>

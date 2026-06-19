@@ -2,6 +2,7 @@ import { Footer } from './components/Footer';
 import { Header } from './components/Header';
 import { AdminPanel } from './pages/AdminPanel';
 import { LoginDemoPage } from './pages/LoginDemoPage';
+import { NotFoundPage } from './pages/NotFoundPage';
 import { AccessSection } from './sections/AccessSection';
 import { ActivitiesSection } from './sections/ActivitiesSection';
 import { AboutSection } from './sections/AboutSection';
@@ -17,7 +18,7 @@ import { ServicesSection } from './sections/ServicesSection';
 import { TestimonialsSection } from './sections/TestimonialsSection';
 
 export default function App() {
-  const path = window.location.pathname;
+  const path = window.location.pathname.replace(/\/+$/, '') || '/';
 
   if (path === '/admin') {
     return <AdminPanel />;
@@ -25,6 +26,10 @@ export default function App() {
 
   if (path === '/login') {
     return <LoginDemoPage />;
+  }
+
+  if (path !== '/') {
+    return <NotFoundPage />;
   }
 
   return (

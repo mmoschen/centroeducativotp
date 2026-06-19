@@ -3,6 +3,7 @@ import { ClipboardCheck } from 'lucide-react';
 import { Button } from '../components/Button';
 import { SectionHeader } from '../components/SectionHeader';
 import { api } from '../services/api';
+import { isValidEmail, isValidPhone } from '../services/validation';
 import type { SolicitudInscripcion } from '../types';
 
 const initialForm: SolicitudInscripcion = {
@@ -17,16 +18,62 @@ const initialForm: SolicitudInscripcion = {
 export function EnrollmentSection() {
   const [form, setForm] = useState<SolicitudInscripcion>(initialForm);
   const [status, setStatus] = useState('');
+  const [statusTone, setStatusTone] = useState<'info' | 'success' | 'error'>('info');
+  const [submitting, setSubmitting] = useState(false);
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    const data = {
+      ...form,
+      nombre_tutor: form.nombre_tutor.trim(),
+      nombre_aspirante: form.nombre_aspirante.trim(),
+      email_contacto: form.email_contacto.trim(),
+      telefono: form.telefono.trim(),
+      mensaje: form.mensaje.trim(),
+    };
+    const missingFields = [
+      ['nombre del tutor', data.nombre_tutor],
+      ['nombre del aspirante', data.nombre_aspirante],
+      ['nivel solicitado', data.nivel_solicitado],
+      ['email', data.email_contacto],
+      ['teléfono', data.telefono],
+      ['mensaje', data.mensaje],
+    ].filter(([, value]) => !value).map(([label]) => label);
+
+    if (missingFields.length > 0) {
+      setStatusTone('error');
+      setStatus(`Completá los campos obligatorios: ${missingFields.join(', ')}.`);
+      return;
+    }
+    if (!isValidEmail(data.email_contacto)) {
+      setStatusTone('error');
+      setStatus('Ingresá un email válido, por ejemplo nombre@dominio.com.');
+      return;
+    }
+    if (!isValidPhone(data.telefono)) {
+      setStatusTone('error');
+      setStatus('Ingresá un teléfono válido de 7 a 15 dígitos. Podés usar +, espacios, guiones y paréntesis.');
+      return;
+    }
+    if (data.mensaje.length < 10) {
+      setStatusTone('error');
+      setStatus('El mensaje debe tener al menos 10 caracteres.');
+      return;
+    }
+
+    setSubmitting(true);
+    setStatusTone('info');
     setStatus('Enviando solicitud...');
     try {
-      await api.crearSolicitud(form);
+      await api.crearSolicitud(data);
       setForm(initialForm);
+      setStatusTone('success');
       setStatus('Solicitud recibida. El estado inicial del trámite es "recibida".');
-    } catch {
-      setStatus('No se pudo enviar la solicitud. Verificá que el backend esté en ejecución.');
+    } catch (error) {
+      setStatusTone('error');
+      setStatus(error instanceof Error ? error.message : 'No se pudo enviar la solicitud.');
+    } finally {
+      setSubmitting(false);
     }
   }
 
@@ -48,14 +95,14 @@ export function EnrollmentSection() {
           </div>
         </div>
 
-        <form className="form-card" onSubmit={handleSubmit}>
+        <form className="form-card" onSubmit={handleSubmit} noValidate>
           <label>
             Nombre del tutor
-            <input required value={form.nombre_tutor} onChange={(event) => setForm({ ...form, nombre_tutor: event.target.value })} />
+            <input required maxLength={100} autoComplete="name" value={form.nombre_tutor} onChange={(event) => setForm({ ...form, nombre_tutor: event.target.value })} />
           </label>
           <label>
             Nombre del aspirante
-            <input required value={form.nombre_aspirante} onChange={(event) => setForm({ ...form, nombre_aspirante: event.target.value })} />
+            <input required maxLength={100} value={form.nombre_aspirante} onChange={(event) => setForm({ ...form, nombre_aspirante: event.target.value })} />
           </label>
           <label>
             Nivel solicitado
@@ -68,19 +115,19 @@ export function EnrollmentSection() {
           <div className="form-row">
             <label>
               Email
-              <input required type="email" value={form.email_contacto} onChange={(event) => setForm({ ...form, email_contacto: event.target.value })} />
+              <input required type="email" maxLength={150} autoComplete="email" value={form.email_contacto} onChange={(event) => setForm({ ...form, email_contacto: event.target.value })} />
             </label>
             <label>
               Teléfono
-              <input required value={form.telefono} onChange={(event) => setForm({ ...form, telefono: event.target.value })} />
+              <input required type="tel" inputMode="tel" maxLength={30} autoComplete="tel" value={form.telefono} onChange={(event) => setForm({ ...form, telefono: event.target.value })} />
             </label>
           </div>
           <label>
             Mensaje
-            <textarea rows={4} value={form.mensaje} onChange={(event) => setForm({ ...form, mensaje: event.target.value })} />
+            <textarea required minLength={10} maxLength={1000} rows={4} value={form.mensaje} onChange={(event) => setForm({ ...form, mensaje: event.target.value })} />
           </label>
-          <Button type="submit">Enviar solicitud</Button>
-          {status && <span className="form-status">{status}</span>}
+          <Button type="submit" disabled={submitting}>{submitting ? 'Enviando...' : 'Enviar solicitud'}</Button>
+          {status && <span className={`form-status form-status-${statusTone}`} role="status" aria-live="polite">{status}</span>}
         </form>
       </div>
     </section>

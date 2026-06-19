@@ -11,6 +11,14 @@ app.use(cors());
 app.use(express.json());
 
 const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const phoneCharactersRegex = /^[0-9+()\s-]+$/;
+const enrollmentLevels = new Set(['Nivel Inicial', 'Nivel Primario', 'Nivel Secundario']);
+const employmentPositions = new Set([
+  'Docente de Nivel Inicial',
+  'Docente de Nivel Primario',
+  'Profesores de Nivel Secundario',
+  'Personal Administrativo',
+]);
 
 function today() {
   return new Date().toISOString().slice(0, 10);
@@ -21,7 +29,30 @@ function sendDbError(res, error) {
 }
 
 function requireFields(body, fields) {
-  return fields.filter((field) => body[field] === undefined || body[field] === null || body[field] === '');
+  return fields.filter((field) => {
+    const value = body[field];
+    return value === undefined || value === null || (typeof value === 'string' && value.trim() === '');
+  });
+}
+
+function normalizeBody(body) {
+  return Object.fromEntries(
+    Object.entries(body).map(([field, value]) => [field, typeof value === 'string' ? value.trim() : value]),
+  );
+}
+
+function isValidPhone(value) {
+  const digitCount = value.replace(/\D/g, '').length;
+  return phoneCharactersRegex.test(value) && digitCount >= 7 && digitCount <= 15;
+}
+
+function isValidHttpUrl(value) {
+  try {
+    const url = new URL(value);
+    return url.protocol === 'http:' || url.protocol === 'https:';
+  } catch {
+    return false;
+  }
 }
 
 function selectFields(body, allowedFields) {
@@ -255,7 +286,7 @@ app.get('/api/opiniones', (req, res) => {
 });
 
 app.post('/api/opiniones', (req, res) => {
-  const { autor_anonimo, comentario } = req.body;
+  const { autor_anonimo, comentario } = normalizeBody(req.body);
   if (!autor_anonimo || !comentario) {
     return res.status(400).json({ error: 'Autor y comentario son obligatorios.' });
   }
@@ -264,8 +295,8 @@ app.post('/api/opiniones', (req, res) => {
     const id = insertRecord('opiniones_web', {
       autor_anonimo,
       comentario,
-      estado_moderacion: req.body.estado_moderacion ?? 'pendiente',
-      visible: req.body.visible ?? 0,
+      estado_moderacion: 'pendiente',
+      visible: 0,
     });
     res.status(201).json(getById('opiniones_web', id));
   } catch (error) {
@@ -292,18 +323,22 @@ app.get('/api/solicitudes-inscripcion', (_req, res) => {
 });
 
 app.post('/api/solicitudes-inscripcion', (req, res) => {
-  const missing = requireFields(req.body, ['nombre_tutor', 'nombre_aspirante', 'nivel_solicitado', 'email_contacto', 'telefono']);
+  const data = normalizeBody(req.body);
+  const missing = requireFields(data, ['nombre_tutor', 'nombre_aspirante', 'nivel_solicitado', 'email_contacto', 'telefono', 'mensaje']);
   if (missing.length > 0) return res.status(400).json({ error: `Faltan campos obligatorios: ${missing.join(', ')}.` });
-  if (!emailRegex.test(req.body.email_contacto)) return res.status(400).json({ error: 'Email de contacto invalido.' });
+  if (!emailRegex.test(data.email_contacto)) return res.status(400).json({ error: 'El email de contacto no tiene un formato válido.' });
+  if (!isValidPhone(data.telefono)) return res.status(400).json({ error: 'El teléfono debe tener entre 7 y 15 dígitos y sólo puede incluir +, espacios, guiones o paréntesis.' });
+  if (!enrollmentLevels.has(data.nivel_solicitado)) return res.status(400).json({ error: 'El nivel solicitado no es válido.' });
+  if (data.mensaje.length < 10) return res.status(400).json({ error: 'El mensaje debe tener al menos 10 caracteres.' });
 
   try {
     const id = insertRecord('solicitudes_inscripcion', {
-      nombre_tutor: req.body.nombre_tutor,
-      nombre_aspirante: req.body.nombre_aspirante,
-      nivel_solicitado: req.body.nivel_solicitado,
-      email_contacto: req.body.email_contacto,
-      telefono: req.body.telefono,
-      mensaje: req.body.mensaje ?? '',
+      nombre_tutor: data.nombre_tutor,
+      nombre_aspirante: data.nombre_aspirante,
+      nivel_solicitado: data.nivel_solicitado,
+      email_contacto: data.email_contacto,
+      telefono: data.telefono,
+      mensaje: data.mensaje,
     });
     res.status(201).json(getById('solicitudes_inscripcion', id));
   } catch (error) {
@@ -327,19 +362,24 @@ function getPostulaciones(_req, res) {
 }
 
 function createPostulacion(req, res) {
-  const missing = requireFields(req.body, ['nombre_candidato', 'email', 'telefono', 'puesto_interes']);
+  const data = normalizeBody(req.body);
+  const missing = requireFields(data, ['nombre_candidato', 'email', 'telefono', 'puesto_interes', 'enlace_cv', 'mensaje']);
   if (missing.length > 0) return res.status(400).json({ error: `Faltan campos obligatorios: ${missing.join(', ')}.` });
-  if (!emailRegex.test(req.body.email)) return res.status(400).json({ error: 'Email invalido.' });
+  if (!emailRegex.test(data.email)) return res.status(400).json({ error: 'El email no tiene un formato válido.' });
+  if (!isValidPhone(data.telefono)) return res.status(400).json({ error: 'El teléfono debe tener entre 7 y 15 dígitos y sólo puede incluir +, espacios, guiones o paréntesis.' });
+  if (!employmentPositions.has(data.puesto_interes)) return res.status(400).json({ error: 'El puesto de interés no es válido.' });
+  if (!isValidHttpUrl(data.enlace_cv)) return res.status(400).json({ error: 'El enlace al CV debe comenzar con http:// o https://.' });
+  if (data.mensaje.length < 20) return res.status(400).json({ error: 'El mensaje de presentación debe tener al menos 20 caracteres.' });
 
   try {
     const id = insertRecord('postulaciones_empleo', {
-      nombre_candidato: req.body.nombre_candidato,
-      email: req.body.email,
-      telefono: req.body.telefono,
-      puesto_interes: req.body.puesto_interes,
-      enlace_cv: req.body.enlace_cv ?? '',
-      mensaje: req.body.mensaje ?? '',
-      estado: req.body.estado ?? 'recibida',
+      nombre_candidato: data.nombre_candidato,
+      email: data.email,
+      telefono: data.telefono,
+      puesto_interes: data.puesto_interes,
+      enlace_cv: data.enlace_cv,
+      mensaje: data.mensaje,
+      estado: 'recibida',
     });
     res.status(201).json(getById('postulaciones_empleo', id));
   } catch (error) {

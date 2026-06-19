@@ -140,8 +140,8 @@ export function initializeDatabase() {
       autor_anonimo TEXT NOT NULL,
       comentario TEXT NOT NULL,
       fecha_publicacion TEXT DEFAULT CURRENT_TIMESTAMP,
-      estado_moderacion TEXT DEFAULT 'visible',
-      visible INTEGER DEFAULT 1
+      estado_moderacion TEXT DEFAULT 'pendiente',
+      visible INTEGER DEFAULT 0
     );
 
     CREATE TABLE IF NOT EXISTS solicitudes_inscripcion (
@@ -151,7 +151,7 @@ export function initializeDatabase() {
       nivel_solicitado TEXT NOT NULL,
       email_contacto TEXT NOT NULL,
       telefono TEXT NOT NULL,
-      mensaje TEXT,
+      mensaje TEXT NOT NULL,
       fecha_solicitud TEXT DEFAULT CURRENT_TIMESTAMP,
       estado_tramite TEXT DEFAULT 'recibida'
     );
@@ -162,8 +162,8 @@ export function initializeDatabase() {
       email TEXT NOT NULL,
       telefono TEXT NOT NULL,
       puesto_interes TEXT NOT NULL,
-      enlace_cv TEXT,
-      mensaje TEXT,
+      enlace_cv TEXT NOT NULL,
+      mensaje TEXT NOT NULL,
       fecha_recepcion TEXT DEFAULT CURRENT_TIMESTAMP,
       estado TEXT DEFAULT 'recibida'
     );
