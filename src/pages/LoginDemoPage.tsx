@@ -4,6 +4,7 @@ import { Button } from '../components/Button';
 import { api } from '../services/api';
 import type { ActividadEscolar, AsignacionDocente, Curso, Instalacion, Noticia, Servicio, UsuarioAcceso } from '../types';
 
+// Credenciales fijas de la demo: se muestran en pantalla para facilitar probar cada rol.
 const demoUsers = [
   ['admin@educar.com', 'admin123', 'admin'],
   ['docente@educar.com', 'docente123', 'docente'],
@@ -146,57 +147,57 @@ export function LoginDemoPage() {
   );
 }
 
+type RoleCardData = { title: string; items: string[] };
+type RoleView = (data: RoleData) => RoleCardData[];
+
+// Registro de vistas por rol: agregar un nuevo rol solo requiere sumar una entrada,
+// sin modificar la lógica de renderizado (Principio Abierto/Cerrado).
+const roleViews: Record<UsuarioAcceso['rol'], RoleView> = {
+  admin: (data) => [
+    {
+      title: 'Resumen institucional',
+      items: [
+        `${(data.noticias ?? []).length} noticias cargadas`,
+        `${(data.actividades ?? []).length} actividades cargadas`,
+        `${(data.cursos ?? []).length} cursos registrados`,
+      ],
+    },
+    {
+      title: 'Gestión disponible',
+      items: ['Solicitudes de inscripción', 'Opiniones y moderación', 'Postulaciones de empleo', 'Alumnos, docentes y cursos'],
+    },
+  ],
+  docente: (data) => [
+    { title: 'Cursos asignados', items: (data.cursos ?? []).map((curso) => `${curso.nivel} ${curso.anio} ${curso.division}`) },
+    { title: 'Asignaciones', items: (data.asignaciones ?? []).map((item) => `${item.materia} - ${item.dia} ${item.horario}`) },
+  ],
+  personal: (data) => [
+    { title: 'Servicios', items: (data.servicios ?? []).map((servicio) => `${servicio.nombre}: ${servicio.tipo}`) },
+    { title: 'Instalaciones', items: (data.instalaciones ?? []).map((item) => `${item.nombre}: ${item.disponible ? 'disponible' : 'no disponible'}`) },
+  ],
+  padre: (data) => [
+    { title: 'Avisos institucionales', items: (data.noticias ?? []).map((noticia) => noticia.titulo) },
+    { title: 'Actividades', items: (data.actividades ?? []).map((actividad) => `${actividad.titulo} - ${actividad.nivel}`) },
+  ],
+  alumno: (data) => [
+    { title: 'Novedades para estudiantes', items: (data.noticias ?? []).map((noticia) => noticia.titulo) },
+    { title: 'Agenda escolar', items: (data.actividades ?? []).map((actividad) => `${actividad.titulo} - ${actividad.fecha}`) },
+  ],
+};
+
 function RoleContent({ usuario, data }: { usuario: UsuarioAcceso; data: RoleData }) {
-  if (usuario.rol === 'admin') {
-    return (
-      <div className="role-grid">
-        <RoleCard title="Resumen institucional" items={[
-          `${(data.noticias ?? []).length} noticias cargadas`,
-          `${(data.actividades ?? []).length} actividades cargadas`,
-          `${(data.cursos ?? []).length} cursos registrados`,
-        ]} />
-        <RoleCard title="Gestión disponible" items={['Solicitudes de inscripción', 'Opiniones y moderación', 'Postulaciones de empleo', 'Alumnos, docentes y cursos']} />
-      </div>
-    );
-  }
+  const view = roleViews[usuario.rol];
+  if (!view) return null;
 
-  if (usuario.rol === 'docente') {
-    return (
-      <div className="role-grid">
-        <RoleCard title="Cursos asignados" items={(data.cursos ?? []).map((curso) => `${curso.nivel} ${curso.anio} ${curso.division}`)} />
-        <RoleCard title="Asignaciones" items={(data.asignaciones ?? []).map((item) => `${item.materia} - ${item.dia} ${item.horario}`)} />
-      </div>
-    );
-  }
+  const cards = view(data);
 
-  if (usuario.rol === 'personal') {
-    return (
-      <div className="role-grid">
-        <RoleCard title="Servicios" items={(data.servicios ?? []).map((servicio) => `${servicio.nombre}: ${servicio.tipo}`)} />
-        <RoleCard title="Instalaciones" items={(data.instalaciones ?? []).map((item) => `${item.nombre}: ${item.disponible ? 'disponible' : 'no disponible'}`)} />
-      </div>
-    );
-  }
-
-  if (usuario.rol === 'padre') {
-    return (
-      <div className="role-grid">
-        <RoleCard title="Avisos institucionales" items={(data.noticias ?? []).map((noticia) => noticia.titulo)} />
-        <RoleCard title="Actividades" items={(data.actividades ?? []).map((actividad) => `${actividad.titulo} - ${actividad.nivel}`)} />
-      </div>
-    );
-  }
-
-  if (usuario.rol === 'alumno') {
-    return (
-      <div className="role-grid">
-        <RoleCard title="Novedades para estudiantes" items={(data.noticias ?? []).map((noticia) => noticia.titulo)} />
-        <RoleCard title="Agenda escolar" items={(data.actividades ?? []).map((actividad) => `${actividad.titulo} - ${actividad.fecha}`)} />
-      </div>
-    );
-  }
-
-  return null;
+  return (
+    <div className="role-grid">
+      {cards.map((card) => (
+        <RoleCard key={card.title} title={card.title} items={card.items} />
+      ))}
+    </div>
+  );
 }
 
 function RoleCard({ title, items }: { title: string; items: string[] }) {
