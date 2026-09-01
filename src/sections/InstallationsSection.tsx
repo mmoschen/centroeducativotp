@@ -1,15 +1,11 @@
-import { useEffect, useState } from 'react';
 import { SectionHeader } from '../components/SectionHeader';
 import { api } from '../services/api';
 import { instalacionesFallback } from '../services/fallbackData';
 import type { Instalacion } from '../types';
+import { useFetchWithFallback } from '../hooks/useFetchWithFallback';
 
 export function InstallationsSection() {
-  const [instalaciones, setInstalaciones] = useState<Instalacion[]>(instalacionesFallback);
-
-  useEffect(() => {
-    api.getInstalaciones().then(setInstalaciones).catch(() => setInstalaciones(instalacionesFallback));
-  }, []);
+  const instalaciones = useFetchWithFallback<Instalacion[]>(api.getInstalaciones, instalacionesFallback);
 
   return (
     <section id="instalaciones" className="section section-gray">

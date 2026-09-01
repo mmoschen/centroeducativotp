@@ -1,20 +1,16 @@
 import { CalendarDays, ArrowRight } from 'lucide-react';
-import { useEffect, useState } from 'react';
 import { SectionHeader } from '../components/SectionHeader';
 import { api } from '../services/api';
 import { noticiasFallback } from '../services/fallbackData';
 import type { Noticia } from '../types';
+import { useFetchWithFallback } from '../hooks/useFetchWithFallback';
 
 function formatDate(date: string) {
   return new Intl.DateTimeFormat('es-AR', { day: 'numeric', month: 'long', year: 'numeric' }).format(new Date(date));
 }
 
 export function NewsSection() {
-  const [noticias, setNoticias] = useState<Noticia[]>(noticiasFallback);
-
-  useEffect(() => {
-    api.getNoticias().then(setNoticias).catch(() => setNoticias(noticiasFallback));
-  }, []);
+  const noticias = useFetchWithFallback<Noticia[]>(api.getNoticias, noticiasFallback);
 
   return (
     <section id="noticias" className="section section-gray">

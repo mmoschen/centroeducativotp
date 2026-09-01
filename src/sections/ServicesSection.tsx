@@ -1,9 +1,9 @@
-import { useEffect, useState } from 'react';
 import { IconMap } from '../components/IconMap';
 import { SectionHeader } from '../components/SectionHeader';
 import { api } from '../services/api';
 import { serviciosFallback } from '../services/fallbackData';
 import type { Servicio } from '../types';
+import { useFetchWithFallback } from '../hooks/useFetchWithFallback';
 
 const wellbeing = [
   'Salud y bienestar',
@@ -13,11 +13,7 @@ const wellbeing = [
 ];
 
 export function ServicesSection() {
-  const [servicios, setServicios] = useState<Servicio[]>(serviciosFallback);
-
-  useEffect(() => {
-    api.getServicios().then(setServicios).catch(() => setServicios(serviciosFallback));
-  }, []);
+  const servicios = useFetchWithFallback<Servicio[]>(api.getServicios, serviciosFallback);
 
   return (
     <section id="servicios" className="section section-blue">

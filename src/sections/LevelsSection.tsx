@@ -1,18 +1,14 @@
 import { Baby, BookOpenCheck, GraduationCap } from 'lucide-react';
-import { useEffect, useState } from 'react';
 import { SectionHeader } from '../components/SectionHeader';
 import { api } from '../services/api';
 import { nivelesFallback } from '../services/fallbackData';
 import type { Nivel } from '../types';
+import { useFetchWithFallback } from '../hooks/useFetchWithFallback';
 
 const levelIcons = [Baby, BookOpenCheck, GraduationCap];
 
 export function LevelsSection() {
-  const [niveles, setNiveles] = useState<Nivel[]>(nivelesFallback);
-
-  useEffect(() => {
-    api.getNiveles().then(setNiveles).catch(() => setNiveles(nivelesFallback));
-  }, []);
+  const niveles = useFetchWithFallback<Nivel[]>(api.getNiveles, nivelesFallback);
 
   return (
     <section id="niveles-educativos" className="section section-white section-compact-top">

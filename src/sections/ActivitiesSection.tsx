@@ -1,20 +1,16 @@
 import { CalendarDays } from 'lucide-react';
-import { useEffect, useState } from 'react';
 import { SectionHeader } from '../components/SectionHeader';
 import { api } from '../services/api';
 import { actividadesFallback } from '../services/fallbackData';
 import type { ActividadEscolar } from '../types';
+import { useFetchWithFallback } from '../hooks/useFetchWithFallback';
 
 function formatDate(date: string) {
   return new Intl.DateTimeFormat('es-AR', { day: 'numeric', month: 'long', year: 'numeric' }).format(new Date(date));
 }
 
 export function ActivitiesSection() {
-  const [actividades, setActividades] = useState<ActividadEscolar[]>(actividadesFallback);
-
-  useEffect(() => {
-    api.getActividades().then(setActividades).catch(() => setActividades(actividadesFallback));
-  }, []);
+  const actividades = useFetchWithFallback<ActividadEscolar[]>(api.getActividades, actividadesFallback);
 
   return (
     <section id="actividades" className="section section-white">

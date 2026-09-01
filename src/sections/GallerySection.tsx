@@ -1,14 +1,10 @@
-import { useEffect, useState } from 'react';
 import { api } from '../services/api';
 import { galeriaFallback } from '../services/fallbackData';
 import type { GaleriaImagen } from '../types';
+import { useFetchWithFallback } from '../hooks/useFetchWithFallback';
 
 export function GallerySection() {
-  const [imagenes, setImagenes] = useState<GaleriaImagen[]>(galeriaFallback);
-
-  useEffect(() => {
-    api.getGaleria().then(setImagenes).catch(() => setImagenes(galeriaFallback));
-  }, []);
+  const imagenes = useFetchWithFallback<GaleriaImagen[]>(api.getGaleria, galeriaFallback);
 
   const visibleImages = imagenes.length > 0 ? imagenes : galeriaFallback;
   const carouselImages = [...visibleImages, ...visibleImages];
