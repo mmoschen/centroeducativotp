@@ -4,6 +4,24 @@ Proyecto web institucional para el centro educativo privado **Educar para Transf
 
 El proyecto esta pensado como entrega clara y explicable para **Metodologia de Sistemas I**: landing institucional, backend funcional, base SQL local, datos de prueba, formularios y panel interno simple.
 
+## Integrantes
+
+- Facundo Salas
+- Lucas Escobar Alabert
+
+## Funcionalidades principales
+
+- **Landing institucional**: pagina publica con informacion del centro educativo, servicios, instalaciones, noticias, actividades escolares y galeria de imagenes.
+- **Solicitud de inscripcion**: formulario publico para que familias interesadas soliciten una vacante, con validacion de campos obligatorios y formato de email.
+- **Postulaciones de empleo**: formulario para que candidatos se postulen a puestos, con seguimiento de estado (recibida, en revision, etc.).
+- **Opiniones web**: los visitantes pueden dejar opiniones sobre la institucion, con un flujo de moderacion antes de publicarse.
+- **Contacto**: formulario de contacto general con almacenamiento de los mensajes recibidos.
+- **Login demo por roles**: acceso diferenciado para administrador, docente, padre, alumno y personal, cada uno con usuarios de prueba predefinidos.
+- **Panel de gestion interno (admin)**: ABM (alta, baja, modificacion) de alumnos, docentes, cursos, asignaciones docentes, servicios, instalaciones, noticias, actividades y galeria.
+- **Gestion academica**: administracion de cursos, asignacion de docentes a cursos, asistencias diarias, evaluaciones y calificaciones de alumnos.
+- **API REST**: backend en Node.js/Express que expone endpoints para cada modulo (alumnos, docentes, cursos, servicios, instalaciones, noticias, opiniones, solicitudes, postulaciones, usuarios, actividades, galeria y contacto), con persistencia en Postgres (o SQLite en desarrollo).
+- **Feedback de estado en el frontend**: mensajes de carga, exito y error en los formularios principales (inscripcion, opinion, postulacion y contacto).
+
 ## Stack
 
 - Frontend: React + TypeScript + Vite.
