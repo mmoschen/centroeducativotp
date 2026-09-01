@@ -1,5 +1,9 @@
 import type { ActividadEscolar, GaleriaImagen, Instalacion, Nivel, Noticia, Opinion, Servicio } from '../types';
 
+// Datos de respaldo para que la landing renderice contenido real de ejemplo
+// incluso cuando el backend no está levantado o falla una petición.
+// Las secciones usan estos valores como estado inicial y como fallback ante errores.
+
 export const nivelesFallback: Nivel[] = [
   {
     id: 1,
@@ -146,6 +150,8 @@ export const actividadesFallback: ActividadEscolar[] = [
   { id: 3, titulo: 'Muestra de ciencias y tecnologia', descripcion: 'Presentacion de experiencias de laboratorio y proyectos interdisciplinarios.', nivel: 'Secundario', fecha: '2027-06-18', visible: 1 },
 ];
 
+// La galería se deriva de las instalaciones para no duplicar datos de ejemplo
+// (mismas imágenes y descripciones, adaptadas al formato de GaleriaImagen).
 export const galeriaFallback: GaleriaImagen[] = instalacionesFallback.slice(0, 5).map((item) => ({
   id: item.id,
   titulo: item.nombre,

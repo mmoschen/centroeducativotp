@@ -1,4 +1,5 @@
 const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+// Permite dígitos, +, espacios, guiones y paréntesis (formato típico de teléfonos argentinos).
 const phoneCharactersRegex = /^[0-9+()\s-]+$/;
 
 export function isValidEmail(value: string) {
@@ -7,6 +8,7 @@ export function isValidEmail(value: string) {
 
 export function isValidPhone(value: string) {
   const trimmed = value.trim();
+  // Se exige entre 7 y 15 dígitos reales para rechazar números claramente inválidos.
   const digitCount = trimmed.replace(/\D/g, '').length;
   return phoneCharactersRegex.test(trimmed) && digitCount >= 7 && digitCount <= 15;
 }

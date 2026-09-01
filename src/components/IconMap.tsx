@@ -9,6 +9,8 @@ import {
   Utensils,
 } from 'lucide-react';
 
+// Traduce el nombre de icono guardado en la base (string) a su componente de lucide-react.
+// El fallback a `School` evita romper el render si llega un nombre desconocido.
 const icons = {
   school: School,
   book: BookOpen,

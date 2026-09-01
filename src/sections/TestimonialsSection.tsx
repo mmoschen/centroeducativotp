@@ -95,6 +95,8 @@ export function TestimonialsSection() {
   );
 }
 
+// Solo se muestran opiniones ya moderadas y marcadas como visibles; el backend
+// entrega las públicas directamente, pero se filtra de nuevo por defensa.
 function esOpinionPublica(opinion: Opinion) {
   return opinion.estado_moderacion === 'visible' && opinion.visible === 1;
 }
