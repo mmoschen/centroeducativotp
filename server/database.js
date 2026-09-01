@@ -4,6 +4,7 @@ import { mkdirSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
+import { hashPassword } from './password.js';
 
 const { Pool } = pg;
 
@@ -542,6 +543,7 @@ export async function initializeDatabase() {
   await exec(databaseMode === 'postgres' ? postgresSchema : sqliteSchema);
   await runMigrations();
   await seedDatabase();
+  await hashLegacyPasswords();
 }
 
 async function runMigrations() {
@@ -744,18 +746,38 @@ async function seedAsignaciones() {
 }
 
 async function seedUsuarios() {
+  const users = [
+    ['Administrador Demo', 'admin_educar', 'admin@educar.com', 'admin123', 'admin', 'activo', null],
+    ['Docente Demo', 'docente_educar', 'docente@educar.com', 'docente123', 'docente', 'activo', 1],
+    ['Padre Demo', 'padre_educar', 'padre@educar.com', 'padre123', 'padre', 'activo', null],
+    ['Alumno Demo', 'alumno_educar', 'alumno@educar.com', 'alumno123', 'alumno', 'activo', 1],
+    ['Personal Demo', 'personal_educar', 'personal@educar.com', 'personal123', 'personal', 'activo', null],
+  ];
+
   await insertMany(
     'usuarios_acceso',
     ['nombre', 'nombre_usuario', 'email', 'password_demo', 'rol', 'estado', 'referencia_id'],
-    [
-      ['Administrador Demo', 'admin_educar', 'admin@educar.com', 'admin123', 'admin', 'activo', null],
-      ['Docente Demo', 'docente_educar', 'docente@educar.com', 'docente123', 'docente', 'activo', 1],
-      ['Padre Demo', 'padre_educar', 'padre@educar.com', 'padre123', 'padre', 'activo', null],
-      ['Alumno Demo', 'alumno_educar', 'alumno@educar.com', 'alumno123', 'alumno', 'activo', 1],
-      ['Personal Demo', 'personal_educar', 'personal@educar.com', 'personal123', 'personal', 'activo', null],
-    ],
+    users.map(([nombre, nombre_usuario, email, password, rol, estado, referencia_id]) => [
+      nombre,
+      nombre_usuario,
+      email,
+      hashPassword(password),
+      rol,
+      estado,
+      referencia_id,
+    ]),
     { ignoreConflict: 'email' },
   );
+}
+
+async function hashLegacyPasswords() {
+  const users = await db.all('SELECT id, password_demo FROM usuarios_acceso');
+  for (const user of users) {
+    const current = user.password_demo ?? '';
+    if (current && !current.includes('$')) {
+      await db.run('UPDATE usuarios_acceso SET password_demo = ? WHERE id = ?', [hashPassword(current), user.id]);
+    }
+  }
 }
 
 async function seedActividades() {

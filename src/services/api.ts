@@ -16,10 +16,13 @@ import type {
   Nivel,
 } from '../types';
 
+// En producción el backend se sirve detrás de la misma URL (/api); en desarrollo apunta al servidor local (3001).
 const API_URL = import.meta.env.VITE_API_URL ?? (import.meta.env.PROD ? '/api' : 'http://localhost:3001/api');
 
 async function request<T>(path: string, options?: RequestInit): Promise<T> {
   const response = await fetch(`${API_URL}${path}`, {
+    // credentials: 'include' envía la cookie de sesión (HttpOnly) necesaria para autenticar /admin.
+    credentials: 'include',
     headers: {
       'Content-Type': 'application/json',
       ...options?.headers,
@@ -28,6 +31,7 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
   });
 
   if (!response.ok) {
+    // El backend devuelve { error } en JSON; el fallback cubre respuestas no-JSON (p. ej. errores de red/proxy).
     const message = await response.json().catch(() => ({ error: 'No se pudo completar la solicitud.' }));
     throw new Error(message.error ?? 'No se pudo completar la solicitud.');
   }
@@ -79,5 +83,7 @@ export const api = {
   crearUsuario: (data: Partial<UsuarioAcceso> & { password_demo: string }) => post<UsuarioAcceso, Partial<UsuarioAcceso> & { password_demo: string }>('/usuarios', data),
   loginDemo: (email: string, password: string) =>
     post<{ usuario: UsuarioAcceso }, { email: string; password: string }>('/login-demo', { email, password }),
+  logout: () => request<{ ok: boolean }>('/logout', { method: 'POST' }),
+  me: () => request<{ usuario: UsuarioAcceso }>('/me'),
   enviarContacto: (data: ContactoMensaje) => post<ContactoMensaje, ContactoMensaje>('/contacto', data),
 };

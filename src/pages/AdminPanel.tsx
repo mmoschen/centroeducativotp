@@ -16,6 +16,8 @@ import type {
   UsuarioAcceso,
 } from '../types';
 
+type AuthState = 'checking' | 'authorized' | 'denied';
+
 type AdminData = {
   solicitudes: SolicitudInscripcion[];
   opiniones: Opinion[];
@@ -43,6 +45,7 @@ const emptyData: AdminData = {
 };
 
 export function AdminPanel() {
+  const [authState, setAuthState] = useState<AuthState>('checking');
   const [data, setData] = useState<AdminData>(emptyData);
   const [status, setStatus] = useState('Cargando datos...');
   const [alumno, setAlumno] = useState({ nombre: '', apellido: '', nivel: 'Inicial', curso: 'Sala de 5', division: 'A' });
@@ -74,8 +77,19 @@ export function AdminPanel() {
     }
   }
 
+  // Se valida la sesión con el backend antes de cargar datos: aunque /admin sea una ruta
+  // del cliente, los endpoints protegidos rechazarían igual las peticiones sin cookie.
   useEffect(() => {
-    loadData();
+    api.me()
+      .then(({ usuario }) => {
+        if (usuario.rol !== 'admin') {
+          setAuthState('denied');
+          return;
+        }
+        setAuthState('authorized');
+        loadData();
+      })
+      .catch(() => setAuthState('denied'));
   }, []);
 
   async function submitAndReload(event: FormEvent<HTMLFormElement>, action: () => Promise<unknown>, message: string) {
@@ -83,6 +97,34 @@ export function AdminPanel() {
     setStatus(message);
     await action();
     await loadData();
+  }
+
+  if (authState !== 'authorized') {
+    return (
+      <div className="internal-page admin-page">
+        <header className="internal-header">
+          <a href="/" className="text-button"><ArrowLeft size={17} /> Volver al sitio</a>
+          <strong>Panel de gestion</strong>
+        </header>
+        <main className="admin-shell">
+          <div className="admin-hero">
+            <Database size={38} />
+            <div>
+              <span className="eyebrow">Acceso restringido</span>
+              <h1>Panel de gestion institucional</h1>
+              <p>
+                {authState === 'checking'
+                  ? 'Verificando sesion...'
+                  : 'Se requiere iniciar sesion con un usuario administrador para acceder a este panel.'}
+              </p>
+            </div>
+            {authState === 'denied' && (
+              <a className="btn btn-primary" href="/login">Iniciar sesion</a>
+            )}
+          </div>
+        </main>
+      </div>
+    );
   }
 
   return (

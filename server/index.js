@@ -1,7 +1,9 @@
 import express from 'express';
 import cors from 'cors';
+import crypto from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { databaseMode, db, initializeDatabase } from './database.js';
+import { hashPassword, verifyPassword } from './password.js';
 
 const app = express();
 const PORT = process.env.PORT ?? 3001;
@@ -10,7 +12,7 @@ const databaseReady = initializeDatabase().catch((error) => {
   databaseInitializationError = error;
 });
 
-app.use(cors());
+app.use(cors({ origin: true, credentials: true }));
 app.use(express.json());
 
 app.use(async (_req, res, next) => {
@@ -22,6 +24,92 @@ app.use(async (_req, res, next) => {
     sendDbError(res, error);
   }
 });
+
+const SESSION_NAME = 'educar_session';
+const SESSION_SECRET = process.env.SESSION_SECRET ?? 'educar-demo-session-secret';
+const SESSION_TTL_MS = 1000 * 60 * 60 * 24;
+
+function parseCookies(req) {
+  const header = req.headers.cookie ?? '';
+  return Object.fromEntries(
+    header.split(';').filter(Boolean).map((part) => {
+      const idx = part.indexOf('=');
+      if (idx === -1) return [];
+      return [part.slice(0, idx).trim(), decodeURIComponent(part.slice(idx + 1).trim())];
+    }),
+  );
+}
+
+function signSession(payload) {
+  return crypto.createHmac('sha256', SESSION_SECRET).update(payload).digest('base64url');
+}
+
+function createSessionToken(user) {
+  const payload = Buffer.from(
+    JSON.stringify({ sub: user.id, rol: user.rol, exp: Date.now() + SESSION_TTL_MS }),
+  ).toString('base64url');
+  return `${payload}.${signSession(payload)}`;
+}
+
+function readSession(req) {
+  const token = parseCookies(req)[SESSION_NAME];
+  if (!token) return null;
+
+  const [payload, signature] = token.split('.');
+  if (!payload || !signature) return null;
+
+  const expected = signSession(payload);
+  const actual = Buffer.from(signature);
+  const expectedBuffer = Buffer.from(expected);
+  if (actual.length !== expectedBuffer.length || !crypto.timingSafeEqual(actual, expectedBuffer)) return null;
+
+  try {
+    const data = JSON.parse(Buffer.from(payload, 'base64url').toString('utf8'));
+    if (!data.exp || data.exp < Date.now()) return null;
+    return data;
+  } catch {
+    return null;
+  }
+}
+
+async function requireAuth(req, res, next) {
+  const session = readSession(req);
+  if (!session) return res.status(401).json({ error: 'Sesion no valida o expirada.' });
+
+  const user = await db.get('SELECT id, rol FROM usuarios_acceso WHERE id = ? AND estado = ?', [session.sub, 'activo']);
+  if (!user) return res.status(401).json({ error: 'Usuario no encontrado.' });
+
+  req.user = { id: user.id, rol: user.rol };
+  next();
+}
+
+function requireAdmin(req, res, next) {
+  if (!req.user || req.user.rol !== 'admin') {
+    return res.status(403).json({ error: 'No autorizado.' });
+  }
+  next();
+}
+
+function requireAdminWhen(query, value) {
+  return (req, res, next) => {
+    if (req.query[query] === value) {
+      return requireAuth(req, res, () => requireAdmin(req, res, next));
+    }
+    return next();
+  };
+}
+
+function setSessionCookie(res, user) {
+  const token = createSessionToken(user);
+  res.setHeader(
+    'Set-Cookie',
+    `${SESSION_NAME}=${token}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${Math.floor(SESSION_TTL_MS / 1000)}`,
+  );
+}
+
+function clearSessionCookie(res) {
+  res.setHeader('Set-Cookie', `${SESSION_NAME}=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0`);
+}
 
 const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const phoneCharactersRegex = /^[0-9+()\s-]+$/;
@@ -103,8 +191,8 @@ async function getById(table, id) {
   return db.get(`SELECT * FROM ${table} WHERE id = ?`, [id]);
 }
 
-function crudRoutes({ basePath, table, allowedFields, requiredFields, orderBy = 'id DESC', softDeleteField }) {
-  app.get(basePath, async (_req, res) => {
+function crudRoutes({ basePath, table, allowedFields, requiredFields, orderBy = 'id DESC', softDeleteField, readAuth, writeAuth = [requireAuth, requireAdmin] }) {
+  app.get(basePath, readAuth ?? [], async (_req, res) => {
     try {
       res.json(await db.all(`SELECT * FROM ${table} ORDER BY ${orderBy}`));
     } catch (error) {
@@ -112,7 +200,7 @@ function crudRoutes({ basePath, table, allowedFields, requiredFields, orderBy = 
     }
   });
 
-  app.get(`${basePath}/:id`, async (req, res) => {
+  app.get(`${basePath}/:id`, readAuth ?? [], async (req, res) => {
     try {
       const record = await getById(table, req.params.id);
       if (!record) return res.status(404).json({ error: 'Registro no encontrado.' });
@@ -122,7 +210,7 @@ function crudRoutes({ basePath, table, allowedFields, requiredFields, orderBy = 
     }
   });
 
-  app.post(basePath, async (req, res) => {
+  app.post(basePath, writeAuth, async (req, res) => {
     const missing = requireFields(req.body, requiredFields);
     if (missing.length > 0) {
       return res.status(400).json({ error: `Faltan campos obligatorios: ${missing.join(', ')}.` });
@@ -137,7 +225,7 @@ function crudRoutes({ basePath, table, allowedFields, requiredFields, orderBy = 
     }
   });
 
-  app.put(`${basePath}/:id`, async (req, res) => {
+  app.put(`${basePath}/:id`, writeAuth, async (req, res) => {
     try {
       const data = selectFields(req.body, allowedFields);
       const changes = await updateRecord(table, req.params.id, data);
@@ -148,7 +236,7 @@ function crudRoutes({ basePath, table, allowedFields, requiredFields, orderBy = 
     }
   });
 
-  app.delete(`${basePath}/:id`, async (req, res) => {
+  app.delete(`${basePath}/:id`, writeAuth, async (req, res) => {
     try {
       const result = softDeleteField
         ? await db.run(`UPDATE ${table} SET ${softDeleteField} = ? WHERE id = ?`, ['inactivo', req.params.id])
@@ -181,6 +269,7 @@ crudRoutes({
   requiredFields: ['nombre', 'apellido', 'nivel'],
   orderBy: 'created_at DESC, id DESC',
   softDeleteField: 'estado',
+  readAuth: [requireAuth, requireAdmin],
 });
 
 crudRoutes({
@@ -190,6 +279,7 @@ crudRoutes({
   requiredFields: ['nombre', 'apellido', 'email', 'especialidad'],
   orderBy: 'created_at DESC, id DESC',
   softDeleteField: 'estado',
+  readAuth: [requireAuth, requireAdmin],
 });
 
 crudRoutes({
@@ -224,7 +314,7 @@ crudRoutes({
   orderBy: 'id',
 });
 
-app.get('/api/noticias', async (req, res) => {
+app.get('/api/noticias', requireAdminWhen('all', '1'), async (req, res) => {
   try {
     const where = req.query.all === '1' ? '' : 'WHERE visible = 1';
     res.json(await db.all(`SELECT * FROM noticias ${where} ORDER BY fecha_publicacion DESC, id DESC`));
@@ -233,7 +323,7 @@ app.get('/api/noticias', async (req, res) => {
   }
 });
 
-app.get('/api/noticias/:id', async (req, res) => {
+app.get('/api/noticias/:id', requireAuth, requireAdmin, async (req, res) => {
   try {
     const noticia = await getById('noticias', req.params.id);
     if (!noticia) return res.status(404).json({ error: 'Noticia no encontrada.' });
@@ -243,7 +333,7 @@ app.get('/api/noticias/:id', async (req, res) => {
   }
 });
 
-app.post('/api/noticias', async (req, res) => {
+app.post('/api/noticias', requireAuth, requireAdmin, async (req, res) => {
   const missing = requireFields(req.body, ['titulo', 'descripcion', 'tipo']);
   if (missing.length > 0) return res.status(400).json({ error: `Faltan campos obligatorios: ${missing.join(', ')}.` });
 
@@ -263,7 +353,7 @@ app.post('/api/noticias', async (req, res) => {
   }
 });
 
-app.put('/api/noticias/:id', async (req, res) => {
+app.put('/api/noticias/:id', requireAuth, requireAdmin, async (req, res) => {
   try {
     const data = selectFields(req.body, ['titulo', 'descripcion', 'contenido', 'fecha_publicacion', 'tipo', 'visible', 'imagen_url']);
     const changes = await updateRecord('noticias', req.params.id, data);
@@ -274,7 +364,7 @@ app.put('/api/noticias/:id', async (req, res) => {
   }
 });
 
-app.delete('/api/noticias/:id', async (req, res) => {
+app.delete('/api/noticias/:id', requireAuth, requireAdmin, async (req, res) => {
   try {
     const result = await db.run('UPDATE noticias SET visible = 0 WHERE id = ?', [req.params.id]);
     if (!result.changes) return res.status(404).json({ error: 'Noticia no encontrada.' });
@@ -284,7 +374,7 @@ app.delete('/api/noticias/:id', async (req, res) => {
   }
 });
 
-app.get('/api/opiniones', async (req, res) => {
+app.get('/api/opiniones', requireAdminWhen('all', '1'), async (req, res) => {
   try {
     const where = req.query.all === '1' ? '' : "WHERE estado_moderacion = 'visible' AND visible = 1";
     res.json(await db.all(`SELECT * FROM opiniones_web ${where} ORDER BY fecha_publicacion DESC, id DESC`));
@@ -312,7 +402,7 @@ app.post('/api/opiniones', async (req, res) => {
   }
 });
 
-app.put('/api/opiniones/:id/moderar', async (req, res) => {
+app.put('/api/opiniones/:id/moderar', requireAuth, requireAdmin, async (req, res) => {
   try {
     const estado = req.body.estado_moderacion ?? req.body.estado ?? 'visible';
     const visible = estado === 'visible' ? 1 : 0;
@@ -327,7 +417,7 @@ app.put('/api/opiniones/:id/moderar', async (req, res) => {
   }
 });
 
-app.get('/api/solicitudes-inscripcion', async (_req, res) => {
+app.get('/api/solicitudes-inscripcion', requireAuth, requireAdmin, async (_req, res) => {
   try {
     res.json(await db.all('SELECT * FROM solicitudes_inscripcion ORDER BY fecha_solicitud DESC, id DESC'));
   } catch (error) {
@@ -359,7 +449,7 @@ app.post('/api/solicitudes-inscripcion', async (req, res) => {
   }
 });
 
-app.put('/api/solicitudes-inscripcion/:id/estado', async (req, res) => {
+app.put('/api/solicitudes-inscripcion/:id/estado', requireAuth, requireAdmin, async (req, res) => {
   try {
     const estado = req.body.estado_tramite ?? req.body.estado ?? 'en revision';
     const result = await db.run('UPDATE solicitudes_inscripcion SET estado_tramite = ? WHERE id = ?', [estado, req.params.id]);
@@ -404,12 +494,12 @@ async function createPostulacion(req, res) {
   }
 }
 
-app.get('/api/postulaciones', getPostulaciones);
-app.get('/api/postulaciones-empleo', getPostulaciones);
+app.get('/api/postulaciones', requireAuth, requireAdmin, getPostulaciones);
+app.get('/api/postulaciones-empleo', requireAuth, requireAdmin, getPostulaciones);
 app.post('/api/postulaciones', createPostulacion);
 app.post('/api/postulaciones-empleo', createPostulacion);
 
-app.put('/api/postulaciones/:id/estado', async (req, res) => {
+app.put('/api/postulaciones/:id/estado', requireAuth, requireAdmin, async (req, res) => {
   try {
     const estado = req.body.estado ?? 'en revision';
     const result = await db.run('UPDATE postulaciones_empleo SET estado = ? WHERE id = ?', [estado, req.params.id]);
@@ -428,10 +518,10 @@ async function getUsuarios(_req, res) {
   }
 }
 
-app.get('/api/usuarios', getUsuarios);
-app.get('/api/usuarios-acceso', getUsuarios);
+app.get('/api/usuarios', requireAuth, requireAdmin, getUsuarios);
+app.get('/api/usuarios-acceso', requireAuth, requireAdmin, getUsuarios);
 
-app.post('/api/usuarios', async (req, res) => {
+app.post('/api/usuarios', requireAuth, requireAdmin, async (req, res) => {
   const missing = requireFields(req.body, ['nombre', 'email', 'password_demo', 'rol']);
   if (missing.length > 0) return res.status(400).json({ error: `Faltan campos obligatorios: ${missing.join(', ')}.` });
   if (!emailRegex.test(req.body.email)) return res.status(400).json({ error: 'Email invalido.' });
@@ -441,7 +531,7 @@ app.post('/api/usuarios', async (req, res) => {
       nombre: req.body.nombre,
       nombre_usuario: req.body.nombre_usuario ?? req.body.email.split('@')[0],
       email: req.body.email,
-      password_demo: req.body.password_demo,
+      password_demo: hashPassword(req.body.password_demo),
       rol: req.body.rol,
       estado: req.body.estado ?? 'activo',
       referencia_id: req.body.referencia_id ?? null,
@@ -453,9 +543,12 @@ app.post('/api/usuarios', async (req, res) => {
   }
 });
 
-app.put('/api/usuarios/:id', async (req, res) => {
+app.put('/api/usuarios/:id', requireAuth, requireAdmin, async (req, res) => {
   try {
     const data = selectFields(req.body, ['nombre', 'nombre_usuario', 'email', 'password_demo', 'rol', 'estado', 'referencia_id']);
+    if (data.password_demo) {
+      data.password_demo = hashPassword(data.password_demo);
+    }
     const changes = await updateRecord('usuarios_acceso', req.params.id, data);
     if (!changes) return res.status(404).json({ error: 'Usuario no encontrado o sin cambios.' });
     const { password_demo, ...usuario } = await getById('usuarios_acceso', req.params.id);
@@ -471,13 +564,31 @@ app.post('/api/login-demo', async (req, res) => {
 
   try {
     const user = await db.get(
-      "SELECT * FROM usuarios_acceso WHERE email = ? AND password_demo = ? AND estado = 'activo'",
-      [email, password],
+      "SELECT * FROM usuarios_acceso WHERE email = ? AND estado = 'activo'",
+      [email],
     );
 
-    if (!user) return res.status(401).json({ error: 'Credenciales demo invalidas.' });
+    if (!user || !verifyPassword(password, user.password_demo)) {
+      return res.status(401).json({ error: 'Credenciales demo invalidas.' });
+    }
     const { password_demo, ...safeUser } = user;
+    setSessionCookie(res, user);
     res.json({ usuario: safeUser });
+  } catch (error) {
+    sendDbError(res, error);
+  }
+});
+
+app.post('/api/logout', (_req, res) => {
+  clearSessionCookie(res);
+  res.json({ ok: true });
+});
+
+app.get('/api/me', requireAuth, async (req, res) => {
+  try {
+    const user = await db.get('SELECT id, nombre, nombre_usuario, email, rol, estado FROM usuarios_acceso WHERE id = ?', [req.user.id]);
+    if (!user) return res.status(401).json({ error: 'Usuario no encontrado.' });
+    res.json({ usuario: user });
   } catch (error) {
     sendDbError(res, error);
   }
@@ -517,7 +628,7 @@ app.post('/api/contacto', async (req, res) => {
   }
 });
 
-app.get('/api/contacto', async (_req, res) => {
+app.get('/api/contacto', requireAuth, requireAdmin, async (_req, res) => {
   try {
     res.json(await db.all('SELECT * FROM contacto_mensajes ORDER BY fecha_recepcion DESC, id DESC'));
   } catch (error) {
